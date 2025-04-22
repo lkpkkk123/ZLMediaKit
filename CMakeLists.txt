@@ -72,6 +72,17 @@ endif()
 
 message(STATUS "编译类型: ${CMAKE_BUILD_TYPE}")
 
+
+
+set(HEADER_FILE "../git_ver.h")
+if(EXISTS ${HEADER_FILE})
+    add_definitions(-DHAVE_GIT_VER=1)
+    message("HAVE_GIT_VER: 1")
+else()
+    add_definitions(-DHAVE_GIT_VER=0)
+    message("HAVE_GIT_VER: 0")
+endif()
+
 # 方便排查编译问题, 需要 FORCE CACHE, 否则需要命令行设置才生效
 # To facilitate the troubleshooting of compilation problems, you need to FORCE CACHE, otherwise you need to set it on the command line to take effect
 set(CMAKE_VERBOSE_MAKEFILE ON CACHE INTERNAL "" FORCE)

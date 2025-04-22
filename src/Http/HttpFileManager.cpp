@@ -484,13 +484,36 @@ static string pathCat(const string &a, const string &b){
  
  * [AUTO-TRANSLATED:2d840fe6]
  */
-static void accessFile(Session &sender, const Parser &parser, const MediaInfo &media_info, const string &file_path, const HttpFileManager::invoker &cb) {
+static void accessFile(Session &sender, const Parser &parser, const MediaInfo &media_info, string file_path, const HttpFileManager::invoker &cb) {
     bool is_hls = end_with(file_path, kHlsSuffix) || end_with(file_path, kHlsFMP4Suffix);
     if (!is_hls && !File::fileExist(file_path)) {
         // 文件不存在且不是hls,那么直接返回404  [AUTO-TRANSLATED:7aae578b]
         // The file does not exist and is not hls, so directly return 404
-        sendNotFound(cb);
-        return;
+		//文件不存在且不是hls,那么直接返回404
+		//为了解决VUE web的try files 路由问题，重定向到index.html
+		GET_CONFIG(string, rootPath, Http::kRootPath);
+		bool bNotFind = true;
+		string ret = File::absolutePath("", rootPath);
+		if (ret.back() != '/')
+			ret.push_back('/');
+		if (start_with(file_path, ret) && file_path.find('.') == string::npos)//vue的虚拟路径
+		{
+			string fileOld = file_path;
+			file_path = ret + "index.html";
+			if (File::fileExist(file_path.data()))
+			{
+				InfoL << "not find " << fileOld << " redirect to " << file_path;
+				bNotFind = false;
+			}
+		}
+
+		if (bNotFind)
+		{
+			InfoL << "not find " << file_path;
+			sendNotFound(cb);
+			return;
+		}
+
     }
     if (is_hls) {
         // hls，那么移除掉后缀获取真实的stream_id并且修改协议为HLS  [AUTO-TRANSLATED:94b5818a]

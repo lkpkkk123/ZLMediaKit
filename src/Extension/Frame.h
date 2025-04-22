@@ -396,7 +396,7 @@ protected:
         _is_key = is_key;
     }
 
-protected:
+public:
     bool _is_key;
     char *_ptr;
     uint64_t _dts;

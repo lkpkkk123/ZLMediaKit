@@ -51,36 +51,38 @@ public:
       * [AUTO-TRANSLATED:f872d7e2]
       */
      void clearCache();
+     const RecordInfo &getReocrdInfo();
+     std::string getHslFile() { return _path_hls; }
 
-protected:
-    std::string onOpenSegment(uint64_t index) override ;
-    void onDelSegment(uint64_t index) override;
-    void onWriteInitSegment(const char *data, size_t len) override;
-    void onWriteSegment(const char *data, size_t len) override;
-    void onWriteHls(const std::string &data, bool include_delay) override;
-    void onFlushLastSegment(uint64_t duration_ms) override;
+ protected:
+     std::string onOpenSegment(uint64_t index) override;
+     void onDelSegment(uint64_t index) override;
+     void onWriteInitSegment(const char *data, size_t len) override;
+     void onWriteSegment(const char *data, size_t len) override;
+     void onWriteHls(const std::string &data, bool include_delay, bool bSwitchHlsFile) override;
+     void onFlushLastSegment(uint64_t duration_ms) override;
 
-private:
-    std::shared_ptr<FILE> makeFile(const std::string &file,bool setbuf = false);
-    void clearCache(bool immediately, bool eof);
-    void saveCurrentDir();
+ private:
+     std::shared_ptr<FILE> makeFile(const std::string &file, bool setbuf = false);
+     void clearCache(bool immediately, bool eof);
+     void saveCurrentDir();
 
-private:
-    int _buf_size;
-    std::string _params;
-    std::string _path_hls;
-    std::string _path_hls_delay;
-    std::string _path_init;
-    std::string _path_prefix;
-    std::string _current_dir;
-    std::string _current_dir_init_file;
-    RecordInfo _info;
-    std::shared_ptr<FILE> _file;
-    std::shared_ptr<char> _file_buf;
-    HlsMediaSource::Ptr _media_src;
-    toolkit::EventPoller::Ptr _poller;
-    std::map<uint64_t/*index*/,std::string/*file_path*/> _segment_file_paths;
-    std::deque<std::tuple<int,std::string> > _current_dir_seg_list;
+ private:
+     int _buf_size;
+     std::string _params;
+     std::string _path_hls;
+     std::string _path_hls_delay;
+     std::string _path_init;
+     std::string _path_prefix;
+     std::string _current_dir;
+     std::string _current_dir_init_file;
+     RecordInfo _info;
+     std::shared_ptr<FILE> _file;
+     std::shared_ptr<char> _file_buf;
+     HlsMediaSource::Ptr _media_src;
+     toolkit::EventPoller::Ptr _poller;
+     std::map<uint64_t /*index*/, std::string /*file_path*/> _segment_file_paths;
+     std::deque<std::tuple<int, std::string>> _current_dir_seg_list;
 };
 
 }//namespace mediakit

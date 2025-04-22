@@ -76,6 +76,9 @@ private:
     RecordInfo _info;
     MP4Muxer::Ptr _muxer;
     std::list<Track::Ptr> _tracks;
+
+	long m_writCount=0;
+	std::string _full_path;
 };
 
 #endif ///ENABLE_MP4

@@ -31,12 +31,20 @@ string Recorder::getRecordPath(Recorder::type type, const MediaTuple& tuple, con
             if (enableVhost) {
                 m3u8FilePath = tuple.shortUrl() + "/hls.m3u8";
             } else {
-                m3u8FilePath = tuple.app + "/" + tuple.stream + "/hls.m3u8";
+                //m3u8FilePath = tuple.app + "/" + tuple.stream + "/hls.m3u8";
+				if (customized_path == "")
+				{
+					m3u8FilePath = tuple.app + "/" + tuple.stream + "/hls.m3u8";//lkpmd,支持定制m3u8的名字
+				}
+				else
+				{
+					m3u8FilePath = tuple.app + "/" + tuple.stream + "/" + customized_path;//lkpmd,支持定制m3u8的名字
+				}
             }
             //Here we use the customized file path.
-            if (!customized_path.empty()) {
-                return File::absolutePath(m3u8FilePath, customized_path);
-            }
+            //if (!customized_path.empty()) {
+            //    return File::absolutePath(m3u8FilePath, customized_path);
+            //}
             return File::absolutePath(m3u8FilePath, hlsPath);
         }
         case Recorder::type_mp4: {
@@ -46,12 +54,25 @@ string Recorder::getRecordPath(Recorder::type type, const MediaTuple& tuple, con
             if (enableVhost) {
                 mp4FilePath = tuple.vhost + "/" + recordAppName + "/" + tuple.app + "/" + tuple.stream + "/";
             } else {
-                mp4FilePath = recordAppName + "/" + tuple.app + "/" + tuple.stream + "/";
+                //mp4FilePath = recordAppName + "/" + tuple.app + "/" + tuple.stream + "/";
+				if (customized_path == "")
+				{
+					string date = getTimeStr("%Y%m%d");
+					string time = getTimeStr("%H%M%S");
+					string fileName = date + "_" + time + ".mp4";
+					mp4FilePath = tuple.app + "/" + tuple.app + "/" + fileName;
+
+				}
+				else
+				{
+					mp4FilePath = tuple.app + "/" + tuple.app + "/" + customized_path;
+				}
+
             }
             //Here we use the customized file path.
-            if (!customized_path.empty()) {
-                return File::absolutePath(mp4FilePath, customized_path);
-            }
+            //if (!customized_path.empty()) {
+            //    return File::absolutePath(mp4FilePath, customized_path);
+            //}
             return File::absolutePath(mp4FilePath, recordPath);
         }
         case Recorder::type_hls_fmp4: {

@@ -567,6 +567,7 @@ void WebRtcTransportImp::onDestory() {
 }
 
 void WebRtcTransportImp::onSendSockData(Buffer::Ptr buf, bool flush, RTC::TransportTuple *tuple) {
+    flush = true; // lkp 为了降低延迟，实际测能降低70-80ms
     if (tuple == nullptr) {
         tuple = _ice_server->GetSelectedTuple();
         if (!tuple) {
@@ -1187,6 +1188,7 @@ void WebRtcTransportImp::onSortedRtp(MediaTrack &track, const string &rid, RtpPa
 
 ///////////////////////////////////////////////////////////////////
 
+static int g_nack_idx = 0;
 void WebRtcTransportImp::onSendRtp(const RtpPacket::Ptr &rtp, bool flush, bool rtx) {
     auto &track = _type_to_track[rtp->type];
     if (!track) {
@@ -1195,6 +1197,9 @@ void WebRtcTransportImp::onSendRtp(const RtpPacket::Ptr &rtp, bool flush, bool r
         return;
     }
     if (!rtx) {
+        if (_nick_list_keep == 0) {
+            _nick_list_keep = (g_nack_idx++) * 9;
+        }
         // 统计rtp发送情况，好做sr汇报  [AUTO-TRANSLATED:142028b2]
         // Statistics of RTP sending, for SR reporting
         track->rtcp_context_send->onRtp(

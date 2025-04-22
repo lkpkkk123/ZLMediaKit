@@ -28,6 +28,17 @@ file(GLOB API_SRC_LIST
   source/*.cpp
   source/*.h)
 
+set(HEADER_FILE "../git_ver.h")
+if(EXISTS ${HEADER_FILE})
+    add_definitions(-DHAVE_GIT_VER=1)
+    message("HAVE_GIT_VER: 1")
+	INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
+    message("ToolKit_Root: ${CMAKE_SOURCE_DIR}")
+else()
+    add_definitions(-DHAVE_GIT_VER=0)
+    message("HAVE_GIT_VER: 0")
+endif()
+
 set(LINK_LIBRARIES ${MK_LINK_LIBRARIES})
 
 set(COMPILE_DEFINITIONS ${MK_COMPILE_DEFINITIONS})

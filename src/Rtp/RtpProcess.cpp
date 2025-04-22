@@ -22,7 +22,7 @@ using namespace toolkit;
 // 但是同时需要控制缓冲长度，防止内存溢出。最多缓存10秒数据，应该足矣等待鉴权hook返回  [AUTO-TRANSLATED:23ff0a4a]
 // But at the same time, you need to control the buffer length to prevent memory overflow. Caching 10 seconds of data should be enough to wait for the authentication hook to return.
 static constexpr size_t kMaxCachedFrameMS = 10 * 1000;
-
+static constexpr char kRtpAppName[] = "nvr";//"rtp";
 namespace mediakit {
 
 RtpProcess::Ptr RtpProcess::createProcess(const MediaTuple &tuple) {
@@ -32,7 +32,7 @@ RtpProcess::Ptr RtpProcess::createProcess(const MediaTuple &tuple) {
 }
 
 RtpProcess::RtpProcess(const MediaTuple &tuple) {
-    _media_info.schema = "rtp";
+    _media_info.schema = kRtpAppName;
     static_cast<MediaTuple &>(_media_info) = tuple;
 
     GET_CONFIG(string, dump_dir, RtpProxy::kDumpDir);

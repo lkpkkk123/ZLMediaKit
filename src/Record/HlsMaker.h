@@ -148,8 +148,8 @@ protected:
      
      * [AUTO-TRANSLATED:5754525f]
      */
-    virtual void onWriteHls(const std::string &data, bool include_delay) = 0;
-
+    //virtual void onWriteHls(const std::string &data, bool include_delay) = 0;
+	virtual void onWriteHls(const std::string &data,  bool include_delay, bool bSwitchHlsFile) = 0;
     /**
      * 上一个 ts 切片写入完成, 可在这里进行通知处理
      * @param duration_ms 上一个 ts 切片的时长, 单位为毫秒
@@ -209,6 +209,9 @@ private:
     uint64_t _file_index = 0;
     std::string _last_file_name;
     std::deque<std::tuple<int,std::string> > _seg_dur_list;
+
+protected:
+	int _max_seg_in_hls = 720;//720;//hls m3u8文件中最大ts片数，默认720,10秒一个切片的话，720相当于可以存2小时的录像
 };
 
 }//namespace mediakit

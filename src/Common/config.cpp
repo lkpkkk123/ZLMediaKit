@@ -44,6 +44,7 @@ bool loadIniConfig(const char *ini_path) {
 namespace Broadcast {
 const string kBroadcastMediaChanged = "kBroadcastMediaChanged";
 const string kBroadcastRecordMP4 = "kBroadcastRecordMP4";
+const string kBroadcastRecordStartOrStop = "kBroadcastRecordStartOrStop";
 const string kBroadcastRecordTs = "kBroadcastRecordTs";
 const string kBroadcastHttpRequest = "kBroadcastHttpRequest";
 const string kBroadcastHttpAccess = "kBroadcastHttpAccess";
@@ -314,6 +315,7 @@ const string kFileBufSize = RECORD_FIELD "fileBufSize";
 const string kFastStart = RECORD_FIELD "fastStart";
 const string kFileRepeat = RECORD_FIELD "fileRepeat";
 const string kEnableFmp4 = RECORD_FIELD "enableFmp4";
+const string kRecordOnce = RECORD_FIELD"recordOnce";
 
 static onceToken token([]() {
     mINI::Instance()[kAppName] = "record";
@@ -322,6 +324,7 @@ static onceToken token([]() {
     mINI::Instance()[kFastStart] = false;
     mINI::Instance()[kFileRepeat] = false;
     mINI::Instance()[kEnableFmp4] = false;
+	mINI::Instance()[kRecordOnce] = false;
 });
 } // namespace Record
 
@@ -338,6 +341,7 @@ const string kFileBufSize = HLS_FIELD "fileBufSize";
 const string kBroadcastRecordTs = HLS_FIELD "broadcastRecordTs";
 const string kDeleteDelaySec = HLS_FIELD "deleteDelaySec";
 const string kFastRegister = HLS_FIELD "fastRegister";
+const string kTsNumInOneM3u8 = HLS_FIELD"tsNumInOneM3u8";
 
 static onceToken token([]() {
     mINI::Instance()[kSegmentDuration] = 2;
@@ -349,6 +353,7 @@ static onceToken token([]() {
     mINI::Instance()[kBroadcastRecordTs] = false;
     mINI::Instance()[kDeleteDelaySec] = 10;
     mINI::Instance()[kFastRegister] = false;
+	mINI::Instance()[kTsNumInOneM3u8] = 720;
 });
 } // namespace Hls
 

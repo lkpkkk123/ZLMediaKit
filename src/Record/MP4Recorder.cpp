@@ -35,6 +35,7 @@ MP4Recorder::~MP4Recorder() {
     try {
         flush();
         closeFile();
+        InfoL << "~MP4Recorder() " << _full_path;
     } catch (std::exception &ex) {
         WarnL << ex.what();
     }
@@ -44,17 +45,18 @@ void MP4Recorder::createFile() {
     closeFile();
     auto date = getTimeStr("%Y-%m-%d");
     auto file_name = date + "-" + getTimeStr("%H-%M-%S") + "-" + std::to_string(_file_index++) + ".mp4";
-    auto full_path = _info.folder + date + "/" + file_name;
-    auto full_path_tmp = _info.folder + date + "/." + file_name;
+    // auto full_path = _info.folder + date + "/" + file_name;
+    // auto full_path_tmp = _info.folder + date + "/." + file_name;
+    auto full_path_tmp = _info.folder + ".tmp"; // lkpmd
+    auto full_path = _info.folder;
 
     // ///record 业务逻辑//////  [AUTO-TRANSLATED:2e78931a]
     // ///record Business Logic//////
     _info.start_time = ::time(NULL);
-    _info.file_name = file_name;
+    _info.file_name = "";
     _info.file_path = full_path;
     GET_CONFIG(string, appName, Record::kAppName);
-    _info.url = appName + "/" + _info.app + "/" + _info.stream + "/" + date + "/" + file_name;
-
+    _info.url = ""; // appName + "/" + _info.app + "/" + _info.stream + "/" + date + "/" + file_name;
     try {
         _muxer = std::make_shared<MP4Muxer>();
         TraceL << "Open tmp mp4 file: " << full_path_tmp;
@@ -65,6 +67,7 @@ void MP4Recorder::createFile() {
             _muxer->addTrack(track);
         }
         _full_path_tmp = full_path_tmp;
+        _full_path = full_path;
     } catch (std::exception &ex) {
         WarnL << ex.what();
     }
@@ -74,6 +77,9 @@ void MP4Recorder::asyncClose() {
     auto muxer = _muxer;
     auto full_path_tmp = _full_path_tmp;
     auto info = _info;
+
+    InfoL << "asyncClose() " << _full_path << " write frame=" << m_writCount;
+
     TraceL << "Start close tmp mp4 file: " << full_path_tmp;
     WorkThreadPool::Instance().getExecutor()->async([muxer, full_path_tmp, info]() mutable {
         info.time_len = muxer->getDuration() / 1000.0f;
@@ -90,11 +96,14 @@ void MP4Recorder::asyncClose() {
                 // 录像文件太小，删除之  [AUTO-TRANSLATED:923d27c3]
                 // The recording file is too small, delete it
                 File::delete_file(full_path_tmp);
+                InfoL << "asyncClose() size " << info.file_size << " smll retrun" << full_path_tmp;
+
                 return;
             }
             // 临时文件名改成正式文件名，防止mp4未完成时被访问  [AUTO-TRANSLATED:541a6f00]
             // Change the temporary file name to the official file name to prevent access to the mp4 before it is completed
             rename(full_path_tmp.data(), info.file_path.data());
+            InfoL << "asyncClose() in cb" << full_path_tmp;
         }
         TraceL << "Emit mp4 record event: " << info.file_path;
         // 触发mp4录制切片生成事件  [AUTO-TRANSLATED:9959dcd4]
@@ -120,6 +129,8 @@ bool MP4Recorder::inputFrame(const Frame::Ptr &frame) {
     if (!(_have_video && frame->getTrackType() == TrackAudio)) {
         // 如果有视频且输入的是音频，那么应该忽略切片逻辑  [AUTO-TRANSLATED:fbb15d93]
         // If there is video and the input is audio, then the slice logic should be ignored
+        GET_CONFIG(bool, bRecordOnce, Record::kRecordOnce);
+
         if (_last_dts == 0) {
             // first frame assign dts
             _last_dts = frame->dts();
@@ -142,15 +153,26 @@ bool MP4Recorder::inputFrame(const Frame::Ptr &frame) {
             // 2. It's time to slice, and there is only audio
             // 3、到了切片时间，有视频并且遇到视频的关键帧  [AUTO-TRANSLATED:fa4a71ad]
             // 3. It's time to slice, there is video and a video keyframe is encountered
-            _last_dts = 0;
-            createFile();
+
+            bool bFit = bRecordOnce && _muxer && duration > _max_second * 1000;
+            // InfoL << "bfit " << bFit;
+            if (bFit) {
+                // InfoL << "closeFile ";
+                closeFile();
+            } else {
+                _last_dts = 0;
+                createFile();
+            }
         }
     }
 
     if (_muxer) {
         // 生成mp4文件  [AUTO-TRANSLATED:76a8d77c]
         // Generate mp4 file
-        return _muxer->inputFrame(frame);
+        // return _muxer->inputFrame(frame);
+        bool b = _muxer->inputFrame(frame);
+        m_writCount++;
+        return b;
     }
     return false;
 }

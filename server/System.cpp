@@ -207,8 +207,8 @@ void System::systemSetup(){
     }
 
 #ifndef ANDROID
-    signal(SIGSEGV, sig_crash);
-    signal(SIGABRT, sig_crash);
+    //signal(SIGSEGV, sig_crash);//lkp
+    //signal(SIGABRT, sig_crash);
     // 忽略挂起信号  [AUTO-TRANSLATED:73e71e54]
     // Ignore the hang up signal
     signal(SIGHUP, SIG_IGN);

@@ -352,6 +352,8 @@ private:
     // http访问时的host ip  [AUTO-TRANSLATED:e8fe6957]
     // Host ip for http access
     std::string _local_ip;
+
+    int _nick_list_keep = 0;
 };
 
 class WebRtcTransportManager {

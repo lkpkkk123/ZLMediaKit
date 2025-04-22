@@ -109,6 +109,10 @@ private:
     // 处理options方法,获取服务器能力  [AUTO-TRANSLATED:a51f6d7c]
     // Handle the OPTIONS method, get server capabilities
     void handleReq_Options(const Parser &parser);
+
+	void handleReq_Heartbeat(const Parser &parser);
+
+
     // 处理describe方法，请求服务器rtsp sdp信息  [AUTO-TRANSLATED:ed2c8fcb]
     // Handle the DESCRIBE method, request server RTSP SDP information
     void handleReq_Describe(const Parser &parser);

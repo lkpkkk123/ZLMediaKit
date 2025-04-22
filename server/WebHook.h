@@ -48,4 +48,8 @@ void onProcessExited();
  * [AUTO-TRANSLATED:8ffdd09b]
  */
 void do_http_hook(const std::string &url, const ArgsType &body, const std::function<void(const Json::Value &, const std::string &)> &func = nullptr);
+
+typedef void (*add_event_fn)();
+int start_main2(int argc, char *argv[], const add_event_fn pfn);
+
 #endif //ZLMEDIAKIT_WEBHOOK_H

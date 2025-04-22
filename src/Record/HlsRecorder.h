@@ -77,6 +77,16 @@ public:
         return _option.hls_demand ? (_clear_cache ? true : _enabled) : true;
     }
 
+	const RecordInfo& getReocrdInfo()
+	{
+		return _hls->getReocrdInfo();
+	}
+
+	std::string getHslFile()
+	{
+		return _hls->getHslFile();
+	}
+
 protected:
     bool _enabled = true;
     bool _clear_cache = false;

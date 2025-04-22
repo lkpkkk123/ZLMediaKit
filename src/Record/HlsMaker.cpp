@@ -81,10 +81,17 @@ void HlsMaker::makeIndexFile(bool include_delay, bool eof) {
     }
     index_str += ss.str();
 
-    if (eof) {
+	bool bSwitchHlsFile = _seg_dur_list.size() >= _max_seg_in_hls;
+    //if (eof) 
+	{
         index_str += "#EXT-X-ENDLIST\n";
     }
-    onWriteHls(index_str, include_delay);
+    onWriteHls(index_str, include_delay,bSwitchHlsFile);
+
+	if (bSwitchHlsFile)
+	{
+		_seg_dur_list.clear();
+	}
 }
 
 void HlsMaker::inputInitSegment(const char *data, size_t len) {
@@ -95,6 +102,13 @@ void HlsMaker::inputInitSegment(const char *data, size_t len) {
 }
 
 void HlsMaker::inputData(const char *data, size_t len, uint64_t timestamp, bool is_idr_fast_packet) {
+
+	auto tkNow = toolkit::getCurrentMillisecond();
+	uint64_t tm1 = 0;
+	uint64_t tm2 = 0;
+	uint64_t tm3 = 0;
+	uint64_t tm4 = 0;
+
     if (data && len) {
         if (timestamp < _last_timestamp) {
             // 时间戳回退了，切片时长重新计时  [AUTO-TRANSLATED:fe91bd7f]
@@ -106,18 +120,26 @@ void HlsMaker::inputData(const char *data, size_t len, uint64_t timestamp, bool 
             // 尝试切片ts  [AUTO-TRANSLATED:62264109]
             // Attempt to slice ts
             addNewSegment(timestamp);
+			tm1 = toolkit::getCurrentMillisecond() - tkNow;
         }
         if (!_last_file_name.empty()) {
             // 存在切片才写入ts数据  [AUTO-TRANSLATED:ddd46115]
             // Write ts data only if there are slices
             onWriteSegment(data, len);
             _last_timestamp = timestamp;
+			tm2 = toolkit::getCurrentMillisecond() - tkNow;
         }
     } else {
         // resetTracks时触发此逻辑  [AUTO-TRANSLATED:0ba915ed]
         // This logic is triggered when resetTracks is called
         flushLastSegment(false);
+		tm3 = toolkit::getCurrentMillisecond() - tkNow;
     }
+
+	if (toolkit::getCurrentMillisecond() - tkNow > 100)
+	{
+		InfoL << "lkptm HlsMaker::inputData time>100 total=" << (toolkit::getCurrentMillisecond() - tkNow) << " tm1:" << tm1 << " tm2:" << tm2 << " tm3:" << tm3;
+	}
 }
 
 void HlsMaker::delOldSegment() {
@@ -147,15 +169,29 @@ void HlsMaker::addNewSegment(uint64_t stamp) {
         // Ensure that the slice with sequence number 0 is opened immediately, if the fast registration function is enabled, the slice with sequence number 1 should also be generated immediately when it encounters a keyframe; otherwise, it needs to wait until the slice duration is long enough
         return;
     }
+
+	auto tkNow = toolkit::getCurrentMillisecond();
+
     // 关闭并保存上一个切片，如果_seg_number==0,那么是点播。  [AUTO-TRANSLATED:14076b61]
     // Close and save the previous slice, if _seg_number==0, then it is on-demand.
     flushLastSegment(false);
+	if (toolkit::getCurrentMillisecond() - tkNow > 100)
+	{
+		InfoL << "lkptm flushLastSegment time>100 total=" << (toolkit::getCurrentMillisecond() - tkNow);
+	}
+	tkNow = toolkit::getCurrentMillisecond();
+
     // 新增切片  [AUTO-TRANSLATED:b8623419]
     // Add a new slice
     _last_file_name = onOpenSegment(_file_index++);
     // 记录本次切片的起始时间戳  [AUTO-TRANSLATED:8eb776e9]
     // Record the starting timestamp of this slice
     _last_seg_timestamp = _last_timestamp ? _last_timestamp : stamp;
+
+	if (toolkit::getCurrentMillisecond() - tkNow > 100)
+	{
+		InfoL << "lkptm onOpenSegment time>100 total=" << (toolkit::getCurrentMillisecond() - tkNow);
+	}
 }
 
 void HlsMaker::flushLastSegment(bool eof){
@@ -178,7 +214,13 @@ void HlsMaker::flushLastSegment(bool eof){
     onFlushLastSegment(seg_dur);
     // 然后写m3u8文件  [AUTO-TRANSLATED:67200ce1]
     // Then write the m3u8 file
+
+	auto tkNow = toolkit::getCurrentMillisecond();
     makeIndexFile(false, eof);
+	if (toolkit::getCurrentMillisecond() - tkNow > 100)
+	{
+		InfoL << "lkptm makeIndexFile Closefile time>100 total=" << (toolkit::getCurrentMillisecond() - tkNow);
+	}
     // 写入切片延迟的m3u8文件  [AUTO-TRANSLATED:b1f12e43]
     // Write the m3u8 file with slice delay
     if (segDelay) {

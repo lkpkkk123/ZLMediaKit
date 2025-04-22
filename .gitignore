@@ -28,7 +28,7 @@
 *.app
 /X64/
 
-
+/.tmp/
 *.DS_Store
 
 /cmake-build-debug/

@@ -152,6 +152,7 @@ void RtspSession::onWholeRtspPacket(Parser &parser) {
         s_cmd_functions.emplace("POST", &RtspSession::handleReq_Post);
         s_cmd_functions.emplace("SET_PARAMETER", &RtspSession::handleReq_SET_PARAMETER);
         s_cmd_functions.emplace("GET_PARAMETER", &RtspSession::handleReq_SET_PARAMETER);
+		s_cmd_functions.emplace("HEARTBEAT", &RtspSession::handleReq_Heartbeat);
     });
 
     auto it = s_cmd_functions.find(method);
@@ -200,6 +201,11 @@ ssize_t RtspSession::getContentLength(Parser &parser) {
 void RtspSession::handleReq_Options(const Parser &parser) {
     //支持这些命令
     sendRtspResponse("200 OK",{"Public" , "OPTIONS, DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE, ANNOUNCE, RECORD, SET_PARAMETER, GET_PARAMETER"});
+}
+
+void RtspSession::handleReq_Heartbeat(const Parser &parser) {
+	//支持这些命令
+	sendRtspResponse("200 OK", { "Public" , "OPTIONS, HEARTBEAT, DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE, ANNOUNCE, RECORD" });
 }
 
 void RtspSession::handleReq_ANNOUNCE(const Parser &parser) {
@@ -441,11 +447,26 @@ void RtspSession::onAuthSuccess() {
             track->_time_stamp = rtsp_src->getTimeStamp(track->_type);
         }
 
-        strong_self->sendRtspResponse("200 OK",
-                                     {"Content-Base", strong_self->_content_base + "/",
-                                      "x-Accept-Retransmit","our-retransmit",
-                                      "x-Accept-Dynamic-Rate","1"
-                                     },rtsp_src->getSdp());
+
+#if 1
+		string newSdp;
+		{
+			newSdp = rtsp_src->getSdp();//lkp 海康demo播放rtsp需要加上这两行，demo里面设置为rtp over rtsp
+			newSdp += "a=Media_header:MEDIAINFO=494D4B48010300000400000101200110803E0000007D000000000000000000000000000000000000;" + string("\r\n");
+			newSdp += "a=appversion:1.0" + string("\r\n");
+		}
+		strong_self->sendRtspResponse("200 OK",
+			{ "Content-Base", strong_self->_content_base + "/",
+			 "x-Accept-Retransmit","our-retransmit",
+			 "x-Accept-Dynamic-Rate","1"
+			}, newSdp);
+#else
+		strong_self->sendRtspResponse("200 OK",
+			{ "Content-Base", strong_self->_content_base + "/",
+			 "x-Accept-Retransmit","our-retransmit",
+			 "x-Accept-Dynamic-Rate","1"
+			}, rtsp_src->getSdp());
+#endif
     });
 }
 

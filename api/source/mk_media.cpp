@@ -11,7 +11,9 @@
 #include "mk_media.h"
 #include "Util/logger.h"
 #include "Common/Device.h"
-
+#if HAVE_GIT_VER
+#include "git_ver.h"
+#endif
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;

@@ -31,7 +31,15 @@ API_EXPORT mk_pusher API_CALL mk_pusher_create_src(mk_media_source ctx){
 API_EXPORT void API_CALL mk_pusher_release(mk_pusher ctx){
     assert(ctx);
     MediaPusher::Ptr *obj = (MediaPusher::Ptr *)ctx;
-    delete obj;
+	//MediaPusher::Ptr &obj = *((MediaPusher::Ptr *)ctx);
+
+	(*obj)->getPoller()->async([obj]() {
+		//切换线程再操作
+		//(*obj)[key_str] = val_str;
+		delete obj;
+
+		});
+	//delete obj;
 }
 
 API_EXPORT void API_CALL mk_pusher_set_option(mk_pusher ctx, const char *key, const char *val){

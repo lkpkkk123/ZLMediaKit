@@ -205,6 +205,12 @@ typedef struct {
      */
     void (API_CALL *on_mk_record_mp4)(const mk_record_info mp4);
 
+		/**
+	* 录像开始或者停止事件，只有hls录像的时候才有 lkpadd
+	*/
+	void (API_CALL *on_mk_record_start_or_stop)(int bStart,const char* record_name,const char* app,const char* stream_id);//lkp
+
+
      /**
      * 录制ts分片文件成功后广播
       * Broadcast after recording ts fragment file successfully

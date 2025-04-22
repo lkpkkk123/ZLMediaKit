@@ -8,6 +8,7 @@
  * may be found in the AUTHORS file in the root of the source tree.
  */
 
+#include <cstdio>
 #include <signal.h>
 #include <iostream>
 #include "Util/File.h"
@@ -26,7 +27,6 @@
 #include "Rtp/RtpServer.h"
 #include "WebApi.h"
 #include "WebHook.h"
-
 #if defined(ENABLE_WEBRTC)
 #include "../webrtc/WebRtcTransport.h"
 #include "../webrtc/WebRtcSession.h"
@@ -218,21 +218,35 @@ string g_ini_file;
 // 加载ssl证书函数对象
 std::function<void()> g_reload_certificates;
 
-int start_main_Server(int argc, char *argv[]) {
+typedef void (*add_event_fn)();
+void reload_cfg()
+{
+	mediakit::loadIniConfig(g_ini_file.data());
+}
+
+int start_main2(int argc, char *argv[],const add_event_fn pfn) {
     {
+
         CMD_main cmd_main;
         try {
             cmd_main.operator()(argc, argv);
         } catch (ExitException &) {
+            printf("start_main2 err 1 \n");
             return 0;
         } catch (std::exception &ex) {
             cout << ex.what() << endl;
             return -1;
         }
 
+
         bool bDaemon = cmd_main.hasKey("daemon");
         LogLevel logLevel = (LogLevel) cmd_main["level"].as<int>();
-        logLevel = MIN(MAX(logLevel, LTrace), LError);
+
+        logLevel = MIN(MAX(logLevel, LTrace), LNoLog);
+        g_ini_file = cmd_main["config"];
+		printf("logtype=%d ini=%s\n", logLevel, g_ini_file.c_str());
+
+        
         g_ini_file = cmd_main["config"];
         string ssl_file = cmd_main["ssl"];
         int threads = cmd_main["threads"];
@@ -242,6 +256,7 @@ int start_main_Server(int argc, char *argv[]) {
         // Set log
         Logger::Instance().add(std::make_shared<ConsoleChannel>("ConsoleChannel", logLevel));
 #if !defined(ANDROID)
+    #if 0
         auto fileChannel = std::make_shared<FileChannel>("FileChannel", cmd_main["log-dir"], logLevel);
         // 日志最多保存天数  [AUTO-TRANSLATED:9bfa8a9a]
         // Maximum number of days to save logs
@@ -249,6 +264,7 @@ int start_main_Server(int argc, char *argv[]) {
         fileChannel->setFileMaxCount(cmd_main["log-slice"]);
         fileChannel->setFileMaxSize(cmd_main["log-size"]);
         Logger::Instance().add(fileChannel);
+    #endif
 #endif // !defined(ANDROID)
 
 #if !defined(_WIN32)
@@ -300,6 +316,7 @@ int start_main_Server(int argc, char *argv[]) {
                         // The last certificate will be used as the default certificate (client ssl handshake does not specify the host)
                         SSL_Initor::Instance().loadCertificate(path.data());
                     }
+
                     return true;
                 });
             };
@@ -390,8 +407,9 @@ int start_main_Server(int argc, char *argv[]) {
         });
 
         uint16_t srtPort = mINI::Instance()[SRT::kPort];
-#endif //defined(ENABLE_SRT)
-
+#endif // defined(ENABLE_SRT)
+        
+        (*pfn)();
         installWebApi();
         InfoL << "已启动http api 接口";
         installWebHook();
@@ -414,7 +432,11 @@ int start_main_Server(int argc, char *argv[]) {
 
             // http服务器，端口默认80  [AUTO-TRANSLATED:8899e852]
             // http server, default port 80
-            if (httpPort) { httpSrv->start<HttpSession>(httpPort, listen_ip); }
+            if (httpPort) {
+                httpSrv->start<HttpSession>(httpPort, listen_ip);
+
+            }
+            
             // https服务器，端口默认443  [AUTO-TRANSLATED:24999616]
             // https server, default port 443
             if (httpsPort) { httpsSrv->start<HttpsSession>(httpsPort, listen_ip); }
@@ -433,7 +455,6 @@ int start_main_Server(int argc, char *argv[]) {
             // webrtc udp服务器  [AUTO-TRANSLATED:157a64e5]
             // webrtc udp server
             if (rtcPort) { rtcSrv_udp->start<WebRtcSession>(rtcPort, listen_ip);}
-
             if (rtcTcpPort) { rtcSrv_tcp->start<WebRtcSession>(rtcTcpPort, listen_ip);}
              
 #endif//defined(ENABLE_WEBRTC)
@@ -493,9 +514,9 @@ int start_main_Server(int argc, char *argv[]) {
 }
 
 #ifndef DISABLE_MAIN
-int main(int argc,char *argv[]) {
-    return start_main_Server(argc, argv);
-}
+// int main(int argc,char *argv[]) {
+//     return start_main(argc,argv);
+// }
 #endif //DISABLE_MAIN
 
 

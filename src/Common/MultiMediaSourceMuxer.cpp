@@ -229,6 +229,19 @@ MultiMediaSourceMuxer::MultiMediaSourceMuxer(const MediaTuple& tuple, float dur_
     enableMuteAudio(option.add_mute_audio);
 }
 
+MultiMediaSourceMuxer::~MultiMediaSourceMuxer()
+{
+	auto hls = _hls;
+	if (hls) {//lkp add 通知录像结束
+		const RecordInfo &ri = hls->getReocrdInfo();
+		std::string recordName = hls->getHslFile();
+		std::string app = ri.app;
+		std::string streamId = ri.stream;
+		NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastRecordStartOrStop, false, recordName, app, streamId);
+	}
+
+}
+
 void MultiMediaSourceMuxer::setMediaListener(const std::weak_ptr<MediaSourceEvent> &listener) {
     setDelegate(listener);
 
@@ -267,6 +280,7 @@ int MultiMediaSourceMuxer::totalReaderCount() const {
            (_mp4 ? _option.mp4_as_player : 0) +
            (_hls ? _hls->readerCount() : 0) +
            (_hls_fmp4 ? _hls_fmp4->readerCount() : 0) +
+		   (_hls ? 1 : 0);//在录像也算一个引用
            (_ring ? _ring->readerCount() : 0);
 }
 
@@ -315,11 +329,27 @@ bool MultiMediaSourceMuxer::setupRecord(MediaSource &sender, Recorder::type type
                     // 设置HlsMediaSource的事件监听器  [AUTO-TRANSLATED:69990c92]
                     // Set the event listener for HlsMediaSource
                     hls->setListener(shared_from_this());
+
+					//通知开始录像事件
+					const RecordInfo &ri = hls->getReocrdInfo();
+					std::string recordName = hls->getHslFile();
+					std::string app = ri.app;
+					std::string streamId = ri.stream;
+					NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastRecordStartOrStop, true, recordName, app, streamId);
+
                 }
                 _hls = hls;
             } else if (!start && _hls) {
                 // 停止录制  [AUTO-TRANSLATED:3dee9292]
                 // Stop recording
+
+				auto hls = _hls;
+				const RecordInfo &ri = hls->getReocrdInfo();
+				std::string recordName = hls->getHslFile();
+				std::string app = ri.app;
+				std::string streamId = ri.stream;
+				NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastRecordStartOrStop, false, recordName, app, streamId);
+
                 _hls = nullptr;
             }
             return true;
@@ -668,7 +698,22 @@ bool MultiMediaSourceMuxer::onTrackFrame_l(const Frame::Ptr &frame_in) {
     }
 
     if (_mp4) {
-        ret = _mp4->inputFrame(frame) ? true : ret;
+        //ret = _mp4->inputFrame(frame) ? true : ret;
+		GET_CONFIG(bool, bRecordOnce, Record::kRecordOnce);
+		//InfoL << " mp4->inputFrame " << bRecordOnce;
+		if (bRecordOnce)
+		{
+			ret = _mp4->inputFrame(frame);
+			if (!ret)
+			{
+				InfoL << "mp4 record auto finished stream " /*<< _get_origin_url()*/;
+				_mp4 = nullptr;//只录一次的情况，如果inputFrame失败说明录像结束，释放并停止录像
+			}
+		}
+		else
+		{
+			ret = _mp4->inputFrame(frame) ? true : ret;
+		}
     }
     if (_fmp4) {
         ret = _fmp4->inputFrame(frame) ? true : ret;

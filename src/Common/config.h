@@ -52,6 +52,10 @@ extern const std::string kBroadcastRecordMP4;
 extern const std::string kBroadcastRecordTs;
 #define BroadcastRecordTsArgs const RecordInfo &info
 
+// 录像开始和停止事件 广播 lkpadd
+extern const std::string kBroadcastRecordStartOrStop;
+#define BroadcastRecordStartOrStopArgs bool bStartOrStop, const std::string &recordName, const std::string &app, const std::string &streamId
+
 // 收到http api请求广播  [AUTO-TRANSLATED:c72e7c3f]
 // Broadcast for receiving http api request
 extern const std::string kBroadcastHttpRequest;
@@ -490,6 +494,10 @@ extern const std::string kFastStart;
 // mp4文件是否重头循环读取  [AUTO-TRANSLATED:69ac72de]
 // Whether to loop read the MP4 file from the beginning
 extern const std::string kFileRepeat;
+
+//是否只录一个文件就结束，用于手动mp4录像
+extern const std::string kRecordOnce;
+
 // mp4录制文件是否采用fmp4格式  [AUTO-TRANSLATED:12559ae0]
 // Whether to use fmp4 format for MP4 recording files
 extern const std::string kEnableFmp4;
@@ -522,6 +530,10 @@ extern const std::string kBroadcastRecordTs;
 // hls直播文件删除延时，单位秒  [AUTO-TRANSLATED:5643cab7]
 // HLS live file deletion delay, in seconds
 extern const std::string kDeleteDelaySec;
+
+//单个m3u8内的ts个数
+extern const std::string kTsNumInOneM3u8;
+
 // 如果设置为1，则第一个切片长度强制设置为1个GOP  [AUTO-TRANSLATED:fbbb651d]
 // If set to 1, the length of the first slice is forced to be 1 GOP
 extern const std::string kFastRegister;

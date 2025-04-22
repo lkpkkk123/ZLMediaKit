@@ -40,6 +40,10 @@ HlsMakerImp::HlsMakerImp(bool is_fmp4, const string &m3u8_file, const string &pa
     _buf_size = bufSize;
     _file_buf.reset(new char[bufSize], [](char *ptr) { delete[] ptr; });
     _info.folder = _path_prefix;
+
+
+	GET_CONFIG(int, tsNumInM3u8, Hls::kTsNumInOneM3u8);
+	_max_seg_in_hls = tsNumInM3u8;
 }
 
 HlsMakerImp::~HlsMakerImp() {
@@ -207,15 +211,38 @@ void HlsMakerImp::onWriteInitSegment(const char *data, size_t len) {
 }
 
 void HlsMakerImp::onWriteSegment(const char *data, size_t len) {
+	auto tkNow = getCurrentMillisecond();
+	uint64_t tm1 = 0;
+	uint64_t tm2 = 0;
+
     if (_file) {
         fwrite(data, len, 1, _file.get());
+		tm1 = getCurrentMillisecond() - tkNow;
     }
     if (_media_src) {
         _media_src->onSegmentSize(len);
+		tm2 = getCurrentMillisecond() - tkNow;
     }
+	if (getCurrentMillisecond() - tkNow > 100)
+	{
+		InfoL << "lkptm onWriteSegment time>100 total=" << (getCurrentMillisecond() - tkNow) << " tm1:" << tm1 << " tm2:" << tm2;
+	}
+}
+string CurTimeStrF()
+{
+
+	time_t tm_now = time(NULL);
+
+	struct tm _tm;
+	_tm = getLocalTime(tm_now);
+	char strdate[64];
+
+	snprintf(strdate, 64, "%4d%02d%02d_%02d%02d%02d", _tm.tm_year - 100 + 2000, _tm.tm_mon + 1, _tm.tm_mday, _tm.tm_hour, _tm.tm_min, _tm.tm_sec);
+
+	return strdate;
 }
 
-void HlsMakerImp::onWriteHls(const std::string &data, bool include_delay) {
+void HlsMakerImp::onWriteHls(const std::string &data, bool include_delay, bool bSwitchHlsFile) {
     auto path = include_delay ? _path_hls_delay : _path_hls;
     auto hls = makeFile(path);
     if (hls) {
@@ -227,21 +254,49 @@ void HlsMakerImp::onWriteHls(const std::string &data, bool include_delay) {
     } else {
         WarnL << "Create hls file failed," << path << " " << get_uv_errmsg();
     }
+
+	if (bSwitchHlsFile)
+	{
+		//录像文件切换事件，一个停止一个开始
+		const RecordInfo &ri = getReocrdInfo();
+		std::string recordName = _path_hls;
+		std::string app = ri.app;
+		std::string streamId = ri.stream;
+		NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastRecordStartOrStop, false, recordName, app, streamId);
+
+		auto strTime = CurTimeStrF();
+		_path_hls = _path_prefix + "/" + strTime + ".m3u8";
+
+		recordName = _path_hls;
+		NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastRecordStartOrStop, true, recordName, app, streamId);
+
+
+	}
 }
 
 void HlsMakerImp::onFlushLastSegment(uint64_t duration_ms) {
     // 关闭并flush文件到磁盘  [AUTO-TRANSLATED:9798ec4d]
     // Close and flush file to disk
+	auto tkNow = getCurrentMillisecond();
     _file = nullptr;
     if (!isLive() || isKeep()) {
         _current_dir_seg_list.emplace_back(duration_ms, _info.file_name.erase(0, _current_dir.size()));
     }
+	if (toolkit::getCurrentMillisecond() - tkNow > 100)
+	{
+		InfoL << "lkptm onFlushLastSegment Closefile time>100 total=" << (toolkit::getCurrentMillisecond() - tkNow);
+	}
     GET_CONFIG(bool, broadcastRecordTs, Hls::kBroadcastRecordTs);
     if (broadcastRecordTs) {
         _info.time_len = duration_ms / 1000.0f;
         _info.file_size = File::fileSize(_info.file_path.data());
         NOTICE_EMIT(BroadcastRecordTsArgs, Broadcast::kBroadcastRecordTs, _info);
     }
+
+	if (toolkit::getCurrentMillisecond() - tkNow > 100)
+	{
+		InfoL << "lkptm notice time>100 total=" << (toolkit::getCurrentMillisecond() - tkNow);
+	}
 }
 
 std::shared_ptr<FILE> HlsMakerImp::makeFile(const string &file, bool setbuf) {
@@ -254,6 +309,7 @@ std::shared_ptr<FILE> HlsMakerImp::makeFile(const string &file, bool setbuf) {
     if (ret && setbuf) {
         setvbuf(ret.get(), _file_buf.get(), _IOFBF, _buf_size);
     }
+	chmod(file.c_str(), 0777);
     return ret;
 }
 
@@ -264,6 +320,11 @@ void HlsMakerImp::setMediaSource(const MediaTuple& tuple) {
 
 HlsMediaSource::Ptr HlsMakerImp::getMediaSource() const {
     return _media_src;
+}
+
+const RecordInfo& HlsMakerImp::getReocrdInfo()
+{
+	return _info;
 }
 
 } // namespace mediakit
