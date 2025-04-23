@@ -60,12 +60,12 @@ string Recorder::getRecordPath(Recorder::type type, const MediaTuple& tuple, con
 					string date = getTimeStr("%Y%m%d");
 					string time = getTimeStr("%H%M%S");
 					string fileName = date + "_" + time + ".mp4";
-					mp4FilePath = tuple.app + "/" + tuple.app + "/" + fileName;
+					mp4FilePath = tuple.app + "/" + tuple.stream + "/" + fileName;
 
 				}
 				else
 				{
-					mp4FilePath = tuple.app + "/" + tuple.app + "/" + customized_path;
+					mp4FilePath = tuple.app + "/" + tuple.stream + "/" + customized_path;
 				}
 
             }

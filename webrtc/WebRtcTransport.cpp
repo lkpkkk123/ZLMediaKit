@@ -567,7 +567,9 @@ void WebRtcTransportImp::onDestory() {
 }
 
 void WebRtcTransportImp::onSendSockData(Buffer::Ptr buf, bool flush, RTC::TransportTuple *tuple) {
-    flush = true; // lkp 为了降低延迟，实际测能降低70-80ms
+    // flush = true; // lkp 为了降低延迟，实际测能降低70-80ms
+    // flush的逻辑是一批rtp包flush一次，作者原始方案是rtp时间戳不一样时flush历史缓存的rtp这样会有一帧的延迟
+    // 新的方法是10rtp包flush一次，这样降低延迟且比较平滑见 PacketCache.h
     if (tuple == nullptr) {
         tuple = _ice_server->GetSelectedTuple();
         if (!tuple) {

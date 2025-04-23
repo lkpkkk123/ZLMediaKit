@@ -912,6 +912,7 @@ bool FlushPolicy::isFlushAble(bool is_video, bool is_key, uint64_t new_stamp, si
         if (mergeWriteMS <= 0) {
             // 关闭了合并写或者合并写阈值小于等于0  [AUTO-TRANSLATED:2397b647]
             // Merge writing is closed or the merge writing threshold is less than or equal to 0.
+            // 这个里面判断时间戳不像等就flush,rtp包时间戳不相等说明是不同帧的rtp包，一帧flush一次 lkp
             flush_flag = isFlushAble_default(is_video, _last_stamp[is_video], new_stamp, cache_size);
         } else {
             flush_flag = isFlushAble_merge(is_video, _last_stamp[is_video], new_stamp, cache_size, mergeWriteMS);

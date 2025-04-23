@@ -97,6 +97,8 @@ void NackList::forEach(const FCI_NACK &nack, const function<void(const RtpPacket
             RtpPacket::Ptr *ptr = getRtp(seq);
             if (ptr) {
                 func(*ptr);
+            } else {
+                WarnL << "rtp seq:" << seq << " not found";
             }
         }
         ++seq;

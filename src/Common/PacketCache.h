@@ -43,6 +43,21 @@ public:
     virtual ~PacketCache() = default;
 
     void inputPacket(uint64_t stamp, bool is_video, std::shared_ptr<packet> pkt, bool key_pos) {
+
+        bool bRtp = std::is_same<packet, RtpPacket>::value;
+        if (bRtp) {//这段代码使码流丝滑lkp
+
+            _cache->emplace_back(std::move(pkt));
+            if (key_pos) {
+                _key_pos = key_pos;
+            }
+            //如果是udp,把这个条件注释掉，每一个rtp都flush会好一点lkp
+            if (_cache->size() >= 10) {
+                flush();
+            }
+
+            return;
+        }
         bool flag = flushImmediatelyWhenCloseMerge();
         if (!flag && _policy.isFlushAble(is_video, key_pos, stamp, _cache->size())) {
             flush();
@@ -95,6 +110,8 @@ private:
     bool _key_pos = false;
     policy _policy;
     std::shared_ptr<packet_list> _cache;
+
+    uint64_t m_lastFlush = 0;
 };
 }
 

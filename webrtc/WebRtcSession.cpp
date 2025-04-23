@@ -50,6 +50,9 @@ EventPoller::Ptr WebRtcSession::queryPoller(const Buffer::Ptr &buffer) {
 
 WebRtcSession::WebRtcSession(const Socket::Ptr &sock) : Session(sock) {
     _over_tcp = sock->sockType() == SockNum::Sock_TCP;
+    if (!_over_tcp) {
+        SockUtil::setSendBuf(sock->rawFD(), 4 * 1024 * 1024);
+    }
 }
 
 void WebRtcSession::attachServer(const Server &server) {
