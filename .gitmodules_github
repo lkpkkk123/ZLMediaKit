@@ -1,6 +1,6 @@
 [submodule "ZLToolKit"]
 	path = 3rdpart/ZLToolKit
-	url = https://github.com/ZLMediaKit/ZLToolKit
+	url = https://github.com/lkpkkk123/zltoolkit_lkp.git
 [submodule "3rdpart/media-server"]
 	path = 3rdpart/media-server
 	url = https://github.com/ireader/media-server
