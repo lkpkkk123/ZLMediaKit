@@ -1,0 +1,14 @@
+ip=192.168.8.79
+port=22
+pass=1
+board_type=4
+user=root
+make_threads=8
+dir=/opt/aibox/log
+mode=t
+name_pattern=aibox
+to_find_str=ShutterCtrl
+endline=1
+build_dir=build
+build_cmd=cmake .. -DENABLE_WEBRTC=false -DENABLE_OPENSSL=false -DOPENSSL_ROOT_DIR=/usr/local/openssl  -DOPENSSL_LIBRARIES=/usr/local/openssl/lib && make -j8
+

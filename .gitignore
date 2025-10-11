@@ -35,7 +35,6 @@
 /cmake-build-release/
 /linux/
 /.vs/
-/.vscode/
 /.idea/
 /c_wrapper/.idea/
 /release/

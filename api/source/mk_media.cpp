@@ -374,3 +374,365 @@ API_EXPORT mk_thread API_CALL mk_media_get_owner_thread(mk_media ctx) {
     MediaHelper::Ptr *obj = (MediaHelper::Ptr *)ctx;
     return (mk_thread)(*obj)->getChannel()->getOwnerPoller(MediaSource::NullMediaSource()).get();
 }
+
+// #include "mk_mediakit.h"
+#include "mk_events.h"
+#include "mk_server.h"
+#include <string.h>
+#include <string>
+
+using namespace std;
+
+void strcpySe2__(char *pDest, const char *pSrc, int nMaxDestLen) {
+    pDest[0] = 0; // 防止字符串为空的时候出问题
+    strncpy(pDest, pSrc, nMaxDestLen);
+    pDest[nMaxDestLen - 1] = 0;
+}
+#define strcpySe3(d, s) strcpySe2__(d, s, sizeof(d))
+
+uint64_t GetTickCount_tt() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts); // 开机到现在的时间
+    return (ts.tv_sec * 1000 + ts.tv_nsec / (1000 * 1000));
+}
+
+string g_strUser;
+string g_strPass;
+
+void API_CALL on_mk_media_play(const mk_media_info url_info, const mk_auth_invoker invoker, const mk_sock_info sender) {
+
+    char ip[64];
+    printf(
+        "rtsp play info, local: %s:%d, peer: %s:%d\n"
+        "%s/%s/%s/%s, url params: %s\n",
+        mk_sock_info_local_ip(sender, ip), mk_sock_info_local_port(sender), mk_sock_info_peer_ip(sender, ip + 32), mk_sock_info_peer_port(sender),
+        mk_media_info_get_schema(url_info), mk_media_info_get_vhost(url_info), mk_media_info_get_app(url_info), mk_media_info_get_stream(url_info),
+        mk_media_info_get_params(url_info));
+
+    mk_auth_invoker_do(invoker, nullptr);
+
+    if (0) {
+        // 验证权限
+        // MediaAuthInfo authParam;
+        // mk_sock_info_peer_ip(sender, authParam.peerIp);
+        // strcpySe2(authParam.schema, mk_media_info_get_schema(url_info));
+        // strcpySe2(authParam.streamName, mk_media_info_get_stream(url_info));
+        // strcpySe2(authParam.app, mk_media_info_get_app(url_info));
+        // strcpySe2(authParam.urlParam, mk_media_info_get_params(url_info));
+        // 允许播放
+        bool bAuthSucc = true;
+        if (bAuthSucc) {
+            mk_auth_invoker_do(invoker, nullptr);
+        } else {
+            mk_auth_invoker_do(invoker, "user or pass err");
+        }
+    }
+}
+
+void API_CALL on_mk_media_no_reader(const mk_media_source sender) {
+    printf(
+        "no reader %s/%s/%s/%s\n", mk_media_source_get_schema(sender), mk_media_source_get_vhost(sender), mk_media_source_get_app(sender),
+        mk_media_source_get_stream(sender));
+}
+
+void on_mk_rtsp_get_realm(const mk_media_info url_info, const mk_rtsp_get_realm_invoker invoker, const mk_sock_info sender) {
+
+    char ip[64];
+    printf(
+        "client info, local: %s:%d, peer: %s:%d\n"
+        "%s/%s/%s/%s, url params: %s",
+        mk_sock_info_local_ip(sender, ip), mk_sock_info_local_port(sender), mk_sock_info_peer_ip(sender, ip + 32), mk_sock_info_peer_port(sender),
+        mk_media_info_get_schema(url_info), mk_media_info_get_vhost(url_info), mk_media_info_get_app(url_info), mk_media_info_get_stream(url_info),
+        mk_media_info_get_params(url_info));
+
+    // rtsp播放默认鉴权
+    mk_rtsp_get_realm_invoker_do(invoker, "mk_server");
+}
+
+void API_CALL on_mk_rtsp_auth(
+    const mk_media_info url_info, const char *realm, const char *user_name, int must_no_encrypt, const mk_rtsp_auth_invoker invoker,
+    const mk_sock_info sender) {
+
+    char ip[64];
+    printf(
+        "client info, local: %s:%d, peer: %s:%d\n"
+        "%s/%s/%s/%s, url params: %s\n"
+        "realm: %s, user_name: %s, must_no_encrypt: %d",
+        mk_sock_info_local_ip(sender, ip), mk_sock_info_local_port(sender), mk_sock_info_peer_ip(sender, ip + 32), mk_sock_info_peer_port(sender),
+        mk_media_info_get_schema(url_info), mk_media_info_get_vhost(url_info), mk_media_info_get_app(url_info), mk_media_info_get_stream(url_info),
+        mk_media_info_get_params(url_info), realm, user_name, (int)must_no_encrypt);
+
+    mk_rtsp_auth_invoker_do(invoker, 0, g_strPass.c_str());
+}
+
+class MediaRun : public mk_video_info {
+public:
+    MediaRun() {}
+    ~MediaRun() {
+        mk_media_release(media);
+        media = nullptr;
+    }
+    mk_media media = nullptr;
+};
+
+H_MK_STREAM mk_add_stream(mk_video_info *vi) {
+    if (vi == nullptr) {
+        return nullptr;
+    }
+
+    MediaRun *pMedia = new MediaRun();
+    mk_video_info *pB = pMedia;
+    *pB = *vi;
+
+    int codecid = pMedia->nCodecId;
+    int w = pMedia->nW;
+    int h = pMedia->nH;
+    float fps = pMedia->fps;
+
+    string strApp;
+    strApp = string(pMedia->strApp) == "" ? "live" : pMedia->strApp;
+    pMedia->media = mk_media_create("__defaultVhost__", strApp.c_str(), pMedia->strName, 0, 0, 0);
+    // int audio_codec = -1;// mk_player_audio_codec_id(ctx->player);
+    if (codecid != -1) {
+        int nBitRate = 1024 * 1024 * 4;
+        mk_media_init_video(pMedia->media, codecid, w, h, fps, 1024 * 1024 * 4);
+    }
+
+    mk_media_init_complete(pMedia->media);
+
+    return pMedia;
+}
+void mk_del_stream(H_MK_STREAM *hs) {
+    MediaRun **pM = (MediaRun **)hs;
+    if (pM && *pM) {
+        delete (*pM);
+        *pM = 0;
+    }
+}
+void mk_input_video(H_MK_STREAM hs, const void *pData, int nLen) {
+    if (hs == nullptr || pData == nullptr || nLen <= 0) {
+        return;
+    }
+
+    MediaRun *pm = (MediaRun *)hs;
+
+    if (pm) {
+        uint32_t tmsrap = GetTickCount_tt();
+
+        switch (pm->nCodecId) {
+            case 0: {
+                // h264
+                mk_media_input_h264(pm->media, pData, (int)nLen, tmsrap, tmsrap);
+                break;
+            }
+            case 1: {
+                // h265
+                mk_media_input_h265(pm->media, pData, (int)nLen, tmsrap, tmsrap);
+                break;
+            }
+        }
+    }
+}
+string strIni = R"([general]
+broadcast_player_count_changed=0
+check_nvidia_dev=1
+enableVhost=0
+enable_ffmpeg_log=0
+flowThreshold=1024
+listen_ip=::
+maxStreamWaitMS=15000
+mediaServerId=ONTWIzVUs0fpAUqE
+mergeWriteMS=0
+resetWhenRePlay=1
+streamNoneReaderDelayMS=20000
+unready_frame_cache=100
+wait_add_track_ms=3000
+wait_audio_track_data_ms=1000
+wait_track_ready_ms=10000
+
+[hls]
+broadcastRecordTs=0
+deleteDelaySec=10
+fastRegister=0
+fileBufSize=65536
+segDelay=0
+segDur=2
+segKeep=0
+segNum=3
+segRetain=5
+tsNumInOneM3u8=720
+
+[http]
+allow_cross_domains=1
+allow_ip_range=::1,127.0.0.1,172.16.0.0-172.31.255.255,192.168.0.0-192.168.255.255,10.0.0.0-10.255.255.255
+charSet=utf-8
+dirMenu=1
+forbidCacheSuffix=
+forwarded_ip_header=
+keepAliveSecond=15
+maxReqSize=40960
+notFound=<html><head><title>404 Not Found</title></head><body bgcolor="white"><center><h1>您访问的资源不存在！</h1></center><hr><center>ZLMediaKit(git hash:/,branch:,build time:2025-10-11T15:43:56)</center></body></html>
+rootPath=./www
+sendBufSize=65536
+virtualPath=
+
+[multicast]
+addrMax=239.255.255.255
+addrMin=239.0.0.0
+udpTTL=64
+
+[protocol]
+add_mute_audio=1
+auto_close=0
+continue_push_ms=15000
+enable_audio=0
+enable_fmp4=0
+enable_hls=0
+enable_hls_fmp4=0
+enable_mp4=0
+enable_rtmp=0
+enable_rtsp=1
+enable_ts=0
+fmp4_demand=0
+hls_demand=0
+hls_save_path=./www
+modify_stamp=1
+mp4_as_player=0
+mp4_max_second=3600
+mp4_save_path=./www
+paced_sender_ms=0
+rtmp_demand=0
+rtsp_demand=1
+ts_demand=0
+
+[record]
+appName=record
+enableFmp4=0
+fastStart=0
+fileBufSize=65536
+fileRepeat=0
+recordOnce=0
+sampleMS=500
+
+[rtmp]
+directProxy=1
+enhanced=0
+handshakeSecond=15
+keepAliveSecond=15
+
+[rtp]
+audioMtuSize=600
+h264_stap_a=1
+lowLatency=0
+rtpMaxSize=10
+videoMtuSize=1400
+
+[rtp_proxy]
+dumpDir=
+gop_cache=1
+h264_pt=98
+h265_pt=99
+opus_pt=100
+port_range=30000-35000
+ps_pt=96
+rtp_g711_dur_ms=100
+timeoutSec=15
+udp_recv_socket_buffer=4194304
+
+[rtsp]
+authBasic=0
+directProxy=1
+handshakeSecond=15
+keepAliveSecond=15
+lowLatency=0
+rtpTransportType=-1
+
+[shell]
+maxReqSize=1024
+
+[srt]
+latencyMul=4
+passPhrase=
+pktBufSize=8192
+port=9000
+timeoutSec=5)";
+bool pathfile_exists(const char *path) {
+    if (path == nullptr) {
+        return false;
+    }
+    FILE *fp = fopen(path, "rb");
+    if (fp == nullptr) {
+        return false;
+    }
+    fclose(fp);
+    return true;
+}
+int mk_start_server(int nPort, const char *user, const char *pass) {
+    char *ini_path = mk_util_get_exe_dir("mk_server.ini");
+    // char *ssl_path = ""//mk_util_get_exe_dir("ssl.p12");
+    if (pathfile_exists(ini_path) == false) {
+        FILE *fp = fopen(ini_path, "wb");
+        if (fp) {
+            fwrite(strIni.data(), 1, strIni.size(), fp);
+            fclose(fp);
+        }
+    }
+
+    if (user != nullptr) {
+        g_strUser = user;
+    }
+    if (pass != nullptr) {
+        g_strPass = pass;
+    }
+
+    mk_config config;
+    memset(&config, 0, sizeof(config));
+
+    config.ini = ini_path, config.ini_is_path = 1;
+    config.log_level = 0;
+    config.log_mask = LOG_CALLBACK;
+    config.log_file_path = NULL;
+    config.ssl = nullptr;
+    config.thread_num = 0;
+
+    mk_env_init(&config);
+    free(ini_path);
+    // free(ssl_path);
+
+    // mk_http_server_start(80, 0);
+    // mk_http_server_start(443, 1);
+    mk_rtsp_server_start(nPort, 0);
+    // mk_rtmp_server_start(1935, 0);
+    // mk_shell_server_start(9000);
+    // mk_rtp_server_start(10000);
+    // mk_rtc_server_start(8000);
+    // mk_srt_server_start(9000);
+
+    mk_events events = {
+        //.on_mk_media_changed = on_mk_media_changed,
+        //.on_mk_media_publish = on_mk_media_publish,
+        .on_mk_media_play = on_mk_media_play,
+        //.on_mk_media_not_found = on_mk_media_not_found,
+        .on_mk_media_no_reader = on_mk_media_no_reader,
+        //.on_mk_http_request = on_mk_http_request,
+        //.on_mk_http_access = on_mk_http_access,
+        //.on_mk_http_before_access = on_mk_http_before_access,
+        .on_mk_rtsp_get_realm = on_mk_rtsp_get_realm,
+        .on_mk_rtsp_auth = on_mk_rtsp_auth,
+        //.on_mk_record_mp4 = on_mk_record_mp4,
+        //.on_mk_shell_login = on_mk_shell_login,
+        //.on_mk_flow_report = on_mk_flow_report
+    };
+    if (g_strPass.empty() || g_strUser.empty()) {
+        events.on_mk_rtsp_get_realm = nullptr;
+        events.on_mk_rtsp_auth = nullptr;
+    }
+    mk_events_listen(&events);
+    // log_info("media server %s", "stared!");
+
+    // log_info("enter any key to exit");
+    // getchar();
+
+    // mk_stop_all_server();
+    return 0;
+}
