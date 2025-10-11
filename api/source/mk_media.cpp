@@ -571,7 +571,7 @@ forbidCacheSuffix=
 forwarded_ip_header=
 keepAliveSecond=15
 maxReqSize=40960
-notFound=<html><head><title>404 Not Found</title></head><body bgcolor="white"><center><h1>您访问的资源不存在！</h1></center><hr><center>ZLMediaKit(git hash:/,branch:,build time:2025-10-11T15:43:56)</center></body></html>
+notFound=<html><head><title>404 Not Found</title></head><body bgcolor="white"><center><h1>您访问的资源不存在！</h1></center><hr><center>mk_server(git hash:/,branch:,build time:2025-10-11T15:43:56)</center></body></html>
 rootPath=./www
 sendBufSize=65536
 virtualPath=
