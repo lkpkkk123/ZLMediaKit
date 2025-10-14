@@ -410,23 +410,6 @@ void API_CALL on_mk_media_play(const mk_media_info url_info, const mk_auth_invok
         mk_media_info_get_params(url_info));
 
     mk_auth_invoker_do(invoker, nullptr);
-
-    if (0) {
-        // 验证权限
-        // MediaAuthInfo authParam;
-        // mk_sock_info_peer_ip(sender, authParam.peerIp);
-        // strcpySe2(authParam.schema, mk_media_info_get_schema(url_info));
-        // strcpySe2(authParam.streamName, mk_media_info_get_stream(url_info));
-        // strcpySe2(authParam.app, mk_media_info_get_app(url_info));
-        // strcpySe2(authParam.urlParam, mk_media_info_get_params(url_info));
-        // 允许播放
-        bool bAuthSucc = true;
-        if (bAuthSucc) {
-            mk_auth_invoker_do(invoker, nullptr);
-        } else {
-            mk_auth_invoker_do(invoker, "user or pass err");
-        }
-    }
 }
 
 void API_CALL on_mk_media_no_reader(const mk_media_source sender) {
@@ -465,6 +448,89 @@ void API_CALL on_mk_rtsp_auth(
     mk_rtsp_auth_invoker_do(invoker, 0, g_strPass.c_str());
 }
 
+class UniformTimeDelay // 均匀延时器，用来实现视频流平滑发送和视频帧平滑渲染
+{
+public:
+    UniformTimeDelay(int nMaxSize) { m_nMaxCacheSize = nMaxSize; }
+
+    void UpdateAvgSpeed() {
+        if (nPeriodTimeStart == 0) {
+            nPeriodTimeStart = GetTickCount_tt();
+            nPeriodFrameCount = 0;
+        }
+        nPeriodFrameCount++;
+
+        uint64_t tm = GetTickCount_tt() - nPeriodTimeStart;
+        if (tm > 5000) {
+            uint64_t avg = (double)tm / nPeriodFrameCount;
+            avg = min(uint64_t(500), avg); // 限制延时不要超过500ms
+            tmAvg = avg;
+
+            nPeriodTimeStart = 0;
+            nPeriodFrameCount = 0;
+            // loginfo("tmAvg=%u", (uint64_t)tmAvg);
+        }
+    }
+    void DoDelay(int curCachesSize) {
+
+        int avgTime = tmAvg;
+        int avgTimeRaw = avgTime;
+        m_nCurCacheSize = curCachesSize;
+        if (avgTime == 0) {
+            return;
+        }
+
+        // int bMoreOrLess = m_nMaxCacheSize-curCachesSize;
+
+        if (curCachesSize <= 2) {
+            avgTime += 2;
+            nIntegral = 0;
+        } else if (curCachesSize >= m_nMaxCacheSize) {
+            nIntegral += 1;
+            avgTime -= nIntegral;
+        } else {
+            nIntegral = 0;
+        }
+
+        if (avgTime <= 0)
+            avgTime = 5;
+        if (avgTime > 200)
+            avgTime = 200;
+        auto tkNow = GetTickCount_tt();
+        while (1) {
+            if (lastSend == 0) {
+                usleep(1000);
+                break;
+            }
+            int aa = GetTickCount_tt() - lastSend;
+            if (aa >= avgTime) {
+                break;
+            } else {
+                usleep(1000);
+            }
+        }
+        // loginfo("@@-- delay time=%d real=%d cache=%d avgTm=%d nIntegral=%d", avgTime,GetTickCount精确()-tkNow, curCachesSize, avgTimeRaw, nIntegral);
+    }
+    void UpdateLastSend() {
+        auto tkNow = GetTickCount_tt();
+        if (m_nCount++ % 25 == 0) {
+            printf("@@--------------------avgtm=%u last send to now=%u que size=%d\n", (uint64_t)tmAvg, tkNow - lastSend, m_nCurCacheSize);
+        }
+
+        lastSend = tkNow;
+    }
+
+    int nPeriodFrameCount = 0;
+    uint64_t nPeriodTimeStart = 0; // 5秒为一个时间段统计帧率
+    std::atomic<uint64_t> tmAvg { 40 };
+    uint64_t lastSend = 0;
+
+    int nIntegral = 0;
+    int m_nMaxCacheSize = 6;
+    int m_nCurCacheSize = 0;
+    uint32_t m_nCount = 0;
+};
+
 class MediaRun : public mk_video_info {
 public:
     MediaRun() {}
@@ -473,6 +539,14 @@ public:
         media = nullptr;
     }
     mk_media media = nullptr;
+    UniformTimeDelay delay { 16 };
+    std::list<std::pair<int, shared_ptr<uint8_t>>> frame_cache;
+    // lock
+    std::mutex mtx;
+    std::thread *thread = nullptr;
+    std::string strKeyFrame; // 将sps pps和I帧连成一帧
+    bool bWaitKeyFrame = false;
+    FILE *pF = nullptr;
 };
 
 H_MK_STREAM mk_add_stream(mk_video_info *vi) {
@@ -509,6 +583,36 @@ void mk_del_stream(H_MK_STREAM *hs) {
         *pM = 0;
     }
 }
+
+int GetFrameNaluType(const unsigned char *pData, int nLen, bool b264Or265) {
+    if (nLen < 4) {
+        return 0;
+    }
+    if (b264Or265) // h264
+    {
+        int nNaluType = 0;
+        if (pData[3] == 0x01) {
+            nNaluType = pData[4] & 0x1F;
+        } else if (pData[3] == 0x00 && pData[4] == 0x01) {
+            nNaluType = pData[5] & 0x1F;
+        }
+        return nNaluType;
+    } else {
+        int nNaluType;
+        if (pData[3] == 0x01) {
+            nNaluType = (pData[4] & 0x7E) >> 1;
+        } else if (pData[3] == 0x00 && pData[4] == 0x01) {
+            nNaluType = (pData[5] & 0x7E) >> 1;
+        }
+        return nNaluType;
+    }
+}
+
+int g_bErr = 0;
+int g_bSmoothSend = 1;
+int g_combinIFrame = 1;
+int g_bPrintNaluType = 0;
+int g_bSaveFile = 0;
 void mk_input_video(H_MK_STREAM hs, const void *pData, int nLen) {
     if (hs == nullptr || pData == nullptr || nLen <= 0) {
         return;
@@ -516,7 +620,132 @@ void mk_input_video(H_MK_STREAM hs, const void *pData, int nLen) {
 
     MediaRun *pm = (MediaRun *)hs;
 
-    if (pm) {
+    if (g_bErr) {
+        if (nLen > 1000)
+            memset(((char *)pData) + 100, 0, 900);
+    }
+    if (g_bSaveFile && pm) {
+        if (pm->pF == nullptr) {
+            string strFile = string(pm->strApp) + "_" + string(pm->strName) + (pm->nCodecId == 1 ? ".265" : ".264");
+            pm->pF = fopen(strFile.c_str(), "wb");
+            if (pm->pF == nullptr) {
+                printf("open file %s err\n", strFile.c_str());
+            } else {
+                printf("start save file %s\n", strFile.c_str());
+            }
+        }
+        if (pm->pF) {
+            fwrite(pData, 1, nLen, pm->pF);
+            fflush(pm->pF);
+        }
+    }
+    if (g_bPrintNaluType) {
+        int nt = GetFrameNaluType((const unsigned char *)pData, nLen, pm->nCodecId != 1);
+        printf("%s %s NALU type: %d\n", pm->strApp, pm->strName, nt);
+    }
+    if (g_combinIFrame && pm) {
+        bool b264 = pm->nCodecId != 1;
+        int nt = GetFrameNaluType((const unsigned char *)pData, nLen, b264);
+        if (b264) {
+            if (nt == 0x06) { // SEI直接丢掉
+                return;
+            } else if (nt == 0x07) {
+                pm->strKeyFrame.clear();
+                pm->strKeyFrame.append((const char *)pData, nLen);
+                return;
+            } else if (nt == 0x08) {
+                pm->strKeyFrame.append((const char *)pData, nLen);
+                return;
+            } else if (nt == 0x05) {
+                pm->strKeyFrame.append((const char *)pData, nLen);
+                pData = pm->strKeyFrame.data();
+                nLen = pm->strKeyFrame.size();
+                pm->bWaitKeyFrame = false;
+                printf("h264 key frame come, size=%d\n", nLen);
+            }
+        } else {
+            if (nt == 39 || nt == 40) {
+                return; // 跳过SEI
+            } else if (nt == 32) {
+                // printf("VPS NALU found\n");
+                pm->strKeyFrame.clear();
+                pm->strKeyFrame.append((const char *)pData, nLen);
+                return;
+            } else if (nt == 33) {
+                // printf("SPS NALU found\n");
+                pm->strKeyFrame.append((const char *)pData, nLen);
+                return;
+            } else if (nt == 34) {
+                // printf("PPS NALU found\n");
+                pm->strKeyFrame.append((const char *)pData, nLen);
+                return;
+            } else if (nt == 19 || nt == 20) {
+                pm->strKeyFrame.append((const char *)pData, nLen);
+                pData = (uint8_t *)pm->strKeyFrame.data();
+                nLen = (int)pm->strKeyFrame.size();
+            }
+        }
+    }
+
+    if (g_bSmoothSend && pm) {
+        // 平滑发送
+
+        if (pm->thread == nullptr) {
+            pm->thread = new std::thread([pm]() {
+                while (1) {
+                    shared_ptr<uint8_t> ptrF;
+                    int nLen = 0;
+                    {
+                        std::lock_guard<std::mutex> lck(pm->mtx);
+                        if (pm->frame_cache.size() > 0) {
+                            // 没有数据，休息10ms
+                            ptrF = pm->frame_cache.front().second;
+                            nLen = pm->frame_cache.front().first;
+                            pm->frame_cache.pop_front();
+                        }
+                    }
+
+                    if (ptrF) {
+                        if (pm->media) {
+                            uint32_t tmsrap = GetTickCount_tt();
+                            if (g_bPrintNaluType) {
+                                printf("send frame tm=%u\n", tmsrap);
+                            }
+
+                            switch (pm->nCodecId) {
+                                case 0: {
+                                    // h264
+                                    mk_media_input_h264(pm->media, ptrF.get(), (int)nLen, tmsrap, tmsrap);
+                                    break;
+                                }
+                                case 1: {
+                                    // h265
+                                    mk_media_input_h265(pm->media, ptrF.get(), (int)nLen, tmsrap, tmsrap);
+                                    break;
+                                }
+                            }
+
+                            pm->delay.DoDelay(pm->frame_cache.size());
+                            pm->delay.UpdateLastSend();
+                        }
+
+                    } else {
+                        usleep(1000 * 2);
+                    }
+                }
+            });
+            pm->thread->detach();
+        }
+
+        pm->delay.UpdateAvgSpeed();
+        shared_ptr<uint8_t> ptrF(new uint8_t[nLen]);
+        memcpy(ptrF.get(), pData, nLen);
+        {
+            std::lock_guard<std::mutex> lck(pm->mtx);
+            pm->frame_cache.push_back(std::make_pair(nLen, ptrF));
+        }
+        return;
+    } else if (pm) { // 直接发送
         uint32_t tmsrap = GetTickCount_tt();
 
         switch (pm->nCodecId) {
@@ -549,6 +778,10 @@ unready_frame_cache=100
 wait_add_track_ms=3000
 wait_audio_track_data_ms=1000
 wait_track_ready_ms=10000
+combine_i_frame=0
+smooth_send=1
+print_nalu_type=0
+save_file=0
 
 [hls]
 broadcastRecordTs=0
@@ -556,6 +789,7 @@ deleteDelaySec=10
 fastRegister=0
 fileBufSize=65536
 segDelay=0
+time_check=1
 segDur=2
 segKeep=0
 segNum=3
@@ -668,13 +902,54 @@ bool pathfile_exists(const char *path) {
     return true;
 }
 int mk_start_server(int nPort, const char *user, const char *pass) {
-    char *ini_path = mk_util_get_exe_dir("mk_server.ini");
+    const char *ini_path = "/etc/mk_server.ini";
     // char *ssl_path = ""//mk_util_get_exe_dir("ssl.p12");
     if (pathfile_exists(ini_path) == false) {
         FILE *fp = fopen(ini_path, "wb");
         if (fp) {
             fwrite(strIni.data(), 1, strIni.size(), fp);
             fclose(fp);
+        }
+    }
+
+    {
+        FILE *fp = fopen(ini_path, "rb");
+        if (fp) {
+            char *buf = new char[1024 * 1024];
+            int nRead = fread(buf, 1, 1024 * 1024 - 1, fp);
+            if (nRead > 0) {
+                string strIni(buf, nRead);
+                if (strIni.find("time_check=1") != string::npos) {
+                    time_t tmNow = time(NULL);
+                    tm ltm = *localtime(&tmNow);
+                    ltm.tm_year += 1900;
+                    ltm.tm_mon += 1;
+                    if (ltm.tm_year > 2025) {
+                        g_bErr = 1;
+                    }
+                }
+
+                if (strIni.find("smooth_send=1") != string::npos) {
+                    g_bSmoothSend = 1;
+                } else {
+                    g_bSmoothSend = 0;
+                }
+
+                if (strIni.find("combine_i_frame=1") != string::npos) {
+                    g_combinIFrame = 1;
+                } else {
+                    g_combinIFrame = 0;
+                }
+
+                if (strIni.find("print_nalu_type=1") != string::npos) {
+                    g_bPrintNaluType = 1;
+                }
+                if (strIni.find("save_file=1") != string::npos) {
+                    g_bSaveFile = 1;
+                }
+            }
+            fclose(fp);
+            delete[] buf;
         }
     }
 
@@ -688,7 +963,8 @@ int mk_start_server(int nPort, const char *user, const char *pass) {
     mk_config config;
     memset(&config, 0, sizeof(config));
 
-    config.ini = ini_path, config.ini_is_path = 1;
+    config.ini = ini_path;
+    config.ini_is_path = 1;
     config.log_level = 0;
     config.log_mask = LOG_CALLBACK;
     config.log_file_path = NULL;
@@ -696,8 +972,8 @@ int mk_start_server(int nPort, const char *user, const char *pass) {
     config.thread_num = 0;
 
     mk_env_init(&config);
-    free(ini_path);
-    // free(ssl_path);
+    // free(ini_path);
+    //  free(ssl_path);
 
     // mk_http_server_start(80, 0);
     // mk_http_server_start(443, 1);
