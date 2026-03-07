@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2016-present The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/ZLMediaKit/ZLMediaKit).
@@ -287,7 +287,7 @@ void H265RtpEncoder::packRtpFu(const char *ptr, size_t len, uint64_t pts, bool i
         {
             // 传入nullptr先不做payload的内存拷贝  [AUTO-TRANSLATED:7ed49f0a]
             // Pass in nullptr first, do not copy the payload memory
-            auto rtp = getRtpInfo().makeRtp(TrackVideo, nullptr, max_size + 3, mark_bit, pts);
+            auto rtp = getRtpInfo().makeRtp(TrackVideo, nullptr, max_size + 3, mark_bit && is_mark, pts);
             // rtp payload 负载部分  [AUTO-TRANSLATED:03a5ef9b]
             // rtp payload load part
             uint8_t *payload = rtp->getPayload();
@@ -336,7 +336,8 @@ void H265RtpEncoder::insertConfigFrame(uint64_t pts){
     
 }
 bool H265RtpEncoder::inputFrame_l(const Frame::Ptr &frame, bool is_mark){
-     if (frame->keyFrame()) {
+     if (frame->keyFrame() && _last_config_pts != frame->pts()) {
+        _last_config_pts = frame->pts();
         // 保证每一个关键帧前都有SPS PPS VPS  [AUTO-TRANSLATED:9189f8d7]
         // Ensure that there are SPS PPS VPS before each key frame
         insertConfigFrame(frame->pts());

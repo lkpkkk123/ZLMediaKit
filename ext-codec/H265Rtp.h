@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2016-present The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/ZLMediaKit/ZLMediaKit).
@@ -104,6 +104,7 @@ private:
     Frame::Ptr _pps;
     Frame::Ptr _vps;
     Frame::Ptr _last_frame;
+    uint64_t _last_config_pts = -1;
 };
 
 }//namespace mediakit
